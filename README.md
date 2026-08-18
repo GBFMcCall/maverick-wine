@@ -9,9 +9,10 @@ Full background/diagnosis lives in `maverick_wine_troubleshooting.md` in the
 separate `LLM-Markdown-Guides` repo — this repo is deliberately kept apart
 from that documentation repo (own version control, own lifecycle).
 
-**Status as of 2026-08-17: shim logic validated headlessly in an isolated
-throwaway Wine prefix. NOT YET tested against the real Maverick.exe or real
-radio hardware — see "What's left" below.**
+**Status as of 2026-08-17: PAUSED. The shim builds and its logic is correct (validated
+headlessly), but testing against the real `Maverick.exe` with the real radio physically
+connected overturned the diagnosis this shim was built against — see "What actually happened
+when tested for real" below. Not resuming without a new lead on the real mechanism.**
 
 ---
 
@@ -174,33 +175,63 @@ class GUID, one enumerated device, the friendly name string, and
 still start cleanly with the forwarding proxy installed (the failure mode
 from the naive non-forwarding attempt does not recur).
 
-## What's left (not done without you)
+## What actually happened when tested for real
 
-1. **Never tested against the real `Maverick.exe`.** The `strings`-derived
-   API list tells us what the app calls, but only clicking through
-   `Set → Set COM` in the running app will actually exercise those calls
-   from Maverick itself and prove the friendly-name string / port mapping
-   is accepted end-to-end. This needs either your own click-through, or
-   your explicit OK for automated UI clicking (`xdotool`) — I did not drive
-   your mouse/keyboard on your live desktop unattended; see
-   "Why no UI automation" below.
-2. **Never tested with the actual radio connected.** Even a successful
-   `Set COM` dialog test only proves detection, not that read/write to the
-   real hardware works over the resulting handle.
-3. **Not deployed to `~/.wine32-maverick`.** Everything above ran only in
-   the disposable `~/.wine32-shim-test` prefix. Deploying to the real prefix
-   means the same system32 rename+replace there — see "Backout plan".
+Tested against the real `Maverick.exe` (in a disposable **copy** of
+`~/.wine32-maverick`, never the real prefix — see "Backout plan"), with the
+user actively present and the real radio physically connected. Three
+independent tests, all negative:
 
-### Why no UI automation
+1. **Shim installed, device already connected before launch.** `Set → Set
+   COM` opens, Comm Port list is empty — same symptom as the original bug.
+   A Wine relay trace scoped to `setupapi.dll`, captured across the exact
+   click that opens the dialog, shows **zero calls into setupapi.dll at
+   all**. Not "returns empty" — never called. An unscoped relay trace of the
+   same click (865,000 lines) confirms it: 100% VB6/OLE string-and-heap
+   management noise, zero `CreateFile`, zero serial-API calls of any kind.
+2. **Real, unmodified Wine builtin (no shim), device already connected
+   before launch.** Same empty list.
+3. **Real, unmodified Wine builtin, live physical unplug/replug of the
+   cable while the dialog was already open** (matching the dialog's own
+   hint text: "plug in the cable... select the new COM port that
+   appears") — testing whether this is a live hot-plug-notification driven
+   list rather than a static enumeration. `dmesg` confirms the real USB
+   re-enumeration happened. A relay trace on both `setupapi.dll` and
+   `user32.dll`, running throughout, shows **zero activity in response**.
 
-This machine's `DISPLAY` is the user's actual live foreground desktop (VS
-Code, browser tabs, terminal all visibly in use in a screenshot taken before
-starting). Driving `xdotool` clicks through Maverick's menus would move a
-real mouse cursor over a real, in-use desktop unattended — a stray click
-landing on the wrong window is exactly the kind of outward-facing,
-hard-to-reverse action worth asking about first rather than assuming. Everything
-in this repo was instead validated by static analysis (`strings`, `objdump`)
-and a headless console test harness with no GUI dependency at all.
+**Conclusion: whatever actually drives this dialog's Comm Port list is not
+`setupapi.dll`, at least not in any code path this dialog exercises.** The
+`SetupDi*`/`SetupDiOpenDevRegKey` symbols really are in the binary
+(confirmed via `strings`), and the shim built against them is logically
+correct and fully working on its own terms — but that's very likely not the
+actual mechanism this specific dialog depends on. Paused here rather than
+keep guessing at the real mechanism blind; see "Next steps" below.
+
+## Next steps (if picked back up)
+
+- **Jeremiah Mulford's own file/description**, if it ever arrives — the
+  most direct way to shortcut this, since he's apparently gotten it working.
+- **A full, unscoped relay trace across the entire dialog lifecycle**
+  (not just the open-click) — expensive (~15MB/sec of trace output for this
+  app) but would show definitively what API surface, if any, this dialog
+  actually touches. Not attempted yet because it's a much bigger,
+  more open-ended investment than anything tried so far.
+- **Ask BridgeCom support directly** (option 2 from the original
+  troubleshooting log) whether this is a known issue with a documented
+  Linux workaround, given the dialog's own hint text implies specific
+  expected behavior (list should update live as you plug in the cable) that
+  doesn't seem to be implemented via any observable Windows API on this
+  Wine version.
+
+### Why no unattended UI automation (earlier in this session)
+
+Before the user was actively present and the radio was connected, I held
+off on driving `xdotool` clicks through Maverick's menus unattended — this
+machine's `DISPLAY` was the user's actual live foreground desktop (VS Code,
+browser tabs, terminal all visibly in use). A stray click landing on the
+wrong window is exactly the kind of outward-facing, hard-to-reverse action
+worth asking about first. All UI automation actually performed happened
+later, with the user actively watching and having explicitly OK'd it.
 
 ---
 
@@ -214,11 +245,17 @@ by any of this. Nothing needs undoing if you decide not to proceed —
 `rm -rf ~/Documents/maverick-setupapi-shim` and it's as if this never
 happened.
 
-### 2. Disposable test prefix
-`~/.wine32-shim-test` currently has the proxy DLL installed
-(`system32/setupapi.dll` replaced, original renamed to
-`setupapi_wine_orig.dll`). It's throwaway — `rm -rf ~/.wine32-shim-test`
-any time, no impact on anything else.
+### 2. Disposable test prefixes
+Two, both throwaway, both safe to `rm -rf` any time with no impact on
+anything else:
+- `~/.wine32-shim-test` — minimal prefix, used for the headless test harness
+  runs. Has the proxy DLL installed (`system32/setupapi.dll` replaced,
+  original renamed to `setupapi_wine_orig.dll`).
+- `~/.wine32-maverick-shimtest` — a full `cp -a` copy of the real
+  `~/.wine32-maverick`, used for testing against the actual `Maverick.exe`
+  with real registry/settings state. Also has the proxy installed the same
+  way. This is the one the real-app testing in "What actually happened
+  when tested for real" used.
 
 ### 3. If deployed to the real `~/.wine32-maverick` prefix
 Deployment (not yet done) would mean, inside that prefix's `system32`:
