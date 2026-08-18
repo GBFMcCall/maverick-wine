@@ -1,0 +1,11 @@
+# BridgeCom Maverick / AnyTone CPS programming cable.
+# STMicroelectronics STM32 Virtual COM Port (VID 0483 / PID 5740).
+#
+# The radio re-enumerates on every power-cycle and on entering PC mode, so the
+# kernel node hops (/dev/ttyACM0 -> ttyACM1 -> ...). Wine's dosdevices/comN is
+# a static symlink, so it goes dangling the moment that happens. This rule
+# pins a stable name to point Wine at instead.
+#
+# Install:  sudo cp 99-anytone-cps.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger
+# Remove:   sudo rm /etc/udev/rules.d/99-anytone-cps.rules && sudo udevadm control --reload-rules
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", SYMLINK+="anytone-cps", MODE="0660", GROUP="dialout"

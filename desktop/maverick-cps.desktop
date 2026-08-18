@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Maverick CPS
+Comment=BridgeCom Maverick CPS radio programming (via the userspace serial bridge -- see README.md)
+Exec=/path/to/maverick-wine/bin/maverick-cps.sh
+Icon=maverick-cps
+Terminal=false
+Categories=Utility;

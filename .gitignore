@@ -1,7 +1,3 @@
-# build artifacts — regenerate with `make`
-src/setupapi.dll
-test/*.exe
-test/*.exe.so
-test/setupapi.dll
+__pycache__/
+*.pyc
 tmp*/
-*.o
