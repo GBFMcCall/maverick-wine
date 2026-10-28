@@ -439,8 +439,10 @@ the short README for the launcher this enabled.
 README.md                              short two-fix overview, start here
 README.detailed.md                     this file -- full investigation and evidence trail
 udev/99-anytone-cps.rules              stable device node                    [IN USE]
-bin/maverick-cps.sh                    launcher: starts the bridge if needed,
-                                        then launches Maverick               [IN USE]
+bin/maverick-cps.sh                    launcher: re-applies fix 1 if a Wine
+                                        update reset it, starts the bridge if
+                                        needed, then launches Maverick       [IN USE]
+tools/probe.c                          setupapi COM-port enumeration probe
 bridge/serial_bridge.py                userspace serial bridge               [IN USE]
 desktop/maverick-cps.desktop           shortcut template (see README.md to install)
 simulator/                             protocol simulator + test harness, no hardware needed
@@ -455,7 +457,8 @@ simulator/                             protocol simulator + test harness, no har
 ## Useful commands
 
 ```bash
-# what does Wine's setupapi actually report?
+# what does Wine's setupapi actually report? (exit 1 = fix 1 missing)
+i686-w64-mingw32-gcc -O2 -o probe.exe tools/probe.c -lsetupapi
 WINEPREFIX=~/.wine32-maverick WINEARCH=win32 wine probe.exe
 
 # watch the serial layer

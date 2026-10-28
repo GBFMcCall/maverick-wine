@@ -25,6 +25,12 @@ sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=tt
 
 That fix allowed the CPS to see the COM port successfully.
 
+**Wine updates undo this fix.** After upgrading Wine (11.15 to 11.19 in my case), the
+first launch refreshes the prefix and resets that value to `"Ports (COM & LPT)"`,
+so the COM port list is empty again. The launcher (below) now checks the value on
+every launch and re-applies it if needed. To check it by hand without the radio,
+[`tools/probe.c`](tools/probe.c) asks Wine for the port list the same way the CPS does.
+
 ## Fix 2 — reads/writes stalled on a split serial frame
 
 The CPS reads the port from the radio the way Windows allows but Linux doesn't guarantee:

@@ -7,6 +7,8 @@
 # radio (see README.md for why).
 #
 # What this script does, every time it's run:
+#   0. Checks the registry value behind fix 1 (Wine upgrades reset it) and
+#      re-applies it if needed.
 #   1. Checks whether the bridge is already running (by pidfile); if not,
 #      starts it in the background. If it IS already running, this is a
 #      no-op for the bridge -- reusing one long-lived bridge across many CPS
@@ -76,6 +78,38 @@ if [ "${1:-}" = "--stop-bridge" ]; then
     fi
     exit 0
 fi
+
+# Fix 1 (see README.md) lives in the prefix's registry, and Wine resets it:
+# after a Wine upgrade, the first launch refreshes the prefix and puts the
+# Ports class (Default) back to "Ports (COM & LPT)", which empties the CPS's
+# COM port list again. So re-check it on every launch and re-apply if needed.
+# The first `wine` call here is also the one that triggers any pending prefix
+# refresh, and it finishes before reg runs, so the check sees the post-refresh
+# value.
+PORTS_KEY='HKLM\SYSTEM\CurrentControlSet\Control\Class\{4D36E978-E325-11CE-BFC1-08002BE10318}'
+
+ports_class_value() {
+    WINEPREFIX="$WINEPREFIX" WINEARCH="$WINEARCH" WINEDEBUG=-all \
+        wine reg query "$PORTS_KEY" /ve 2>/dev/null \
+        | sed -n 's/^.*REG_SZ[[:space:]]*//p' | tr -d '\r'
+}
+
+ensure_ports_class() {
+    local current
+    current=$(ports_class_value)
+    [ "$current" = "Ports" ] && return 0
+    echo "[maverick-cps] Ports class default is \"$current\" (likely reset by a Wine update) -- re-applying fix 1"
+    WINEPREFIX="$WINEPREFIX" WINEARCH="$WINEARCH" WINEDEBUG=-all \
+        wine reg add "$PORTS_KEY" /ve /t REG_SZ /d "Ports" /f >/dev/null 2>&1
+    current=$(ports_class_value)
+    if [ "$current" = "Ports" ]; then
+        echo "[maverick-cps] fix 1 re-applied"
+    else
+        echo "[maverick-cps] WARNING: could not set Ports class default (still \"$current\") -- the CPS will show no COM ports" >&2
+    fi
+}
+
+ensure_ports_class
 
 if bridge_is_running; then
     echo "[maverick-cps] bridge already running (pid $(cat "$PIDFILE")), reusing it"
